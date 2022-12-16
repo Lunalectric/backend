@@ -1,10 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  labels:
+    app: postgres
+  namespace: luna
+data:
+  POSTGRES_DB: postgresdb
+  POSTGRES_USER: admin
+  POSTGRES_PASSWORD: psltest
+---
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: postgres-pv-volume
+  labels:
+    type: local
+    app: postgres
+  namespace: luna
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/mnt/data"
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-pv-claim
+  labels:
+    app: postgres
+  namespace: luna
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
   namespace: luna
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: postgres
@@ -15,17 +59,31 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:12.10 # Docker image
+          image: postgres:10.1
           imagePullPolicy: "IfNotPresent"
           ports:
-            - containerPort: 5432 # Exposing the container port 5432 for PostgreSQL client connections.
+            - containerPort: 5432
           envFrom:
             - configMapRef:
-                name: postgres-secret # Using the ConfigMap postgres-secret
+                name: postgres-config
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
-              name: postgresdata
+              name: postgredb
       volumes:
-        - name: postgresdata
+        - name: postgredb
           persistentVolumeClaim:
-            claimName: postgres-volume-claim
+            claimName: postgres-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+  namespace: luna
+spec:
+  type: NodePort
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
